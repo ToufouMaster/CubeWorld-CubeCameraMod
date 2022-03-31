@@ -1,0 +1,5 @@
+cmake_minimum_required (VERSION 3.8)
+project(project_NoGoldLoss)
+add_subdirectory(cwmods)
+add_library (NoGoldLoss SHARED "main.cpp")
+target_link_libraries (NoGoldLoss LINK_PUBLIC CWSDK)
