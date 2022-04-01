@@ -35,4 +35,6 @@
 	"pop rax \n"\
 	"ret \n"
 
+class Mod : GenericMod {};
+
 #endif // MAIN_H

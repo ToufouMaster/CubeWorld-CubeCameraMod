@@ -1,5 +1,7 @@
 cmake_minimum_required (VERSION 3.8)
 project(project_NoGoldLoss)
 add_subdirectory(cwmods)
-add_library (NoGoldLoss SHARED "main.cpp")
+add_subdirectory(imgui-1.73)
+add_library (NoGoldLoss SHARED "main.cpp" "GuiWindow.cpp" "GuiWindow.h" "CamMod.cpp" "CamMod.h")
 target_link_libraries (NoGoldLoss LINK_PUBLIC CWSDK)
+target_link_libraries (NoGoldLoss LINK_PUBLIC IMGUI)
