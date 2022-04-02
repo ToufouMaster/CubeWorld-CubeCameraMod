@@ -12,21 +12,49 @@
 	*/
 
 
-	bool CamMod::AddKey() {
+cube::DButton* CamMod::GetGuiButton()
+{
+	return &guiButton;
+}
+
+bool CamMod::AddKey(int id) {
 		cube::Game* game = cube::GetGame();
 		cube::Creature* player = game->GetPlayer();
 		if (recording) {
-			wchar_t buffer[250];
-			swprintf_s(buffer, 250, L"Key succesfully added to id %d!\n", key_pos_list.size());
-			game->PrintMessage(buffer, 100, 255, 100);
-			key_pos_list.push_back(player->entity_data.position);
-			key_angle_list.push_back(game->camera_angle);
-			return true;
+			if (id >= 0) {
+				if (key_pos_list.size() != 0) id += 1;
+				wchar_t buffer[250];
+				swprintf_s(buffer, 250, L"Key succesfully added to id %d!\n", id);
+				game->PrintMessage(buffer, 100, 255, 100);
+				key_pos_list.insert(key_pos_list.begin() + id, player->entity_data.position);
+				key_angle_list.insert(key_angle_list.begin() + id, game->camera_angle);
+				key_seconds.insert(key_seconds.begin() + id, 5.);
+				return true;
+			}
 		}
 		else {
 			game->PrintMessage(L"Recording is not activated!\n", 255, 100, 100);
 			return false;
 		}
+	}
+
+	bool CamMod::RemoveKey(int id) {
+		cube::Game* game = cube::GetGame();
+		if (recording) {
+			if (id < key_pos_list.size()) {
+				key_pos_list.erase(key_pos_list.begin() + id);
+				key_angle_list.erase(key_angle_list.begin() + id);
+				key_seconds.erase(key_seconds.begin() + id);
+				return true;
+			}
+			else {
+				game->PrintMessage(L"No keys set yet!\n", 255, 100, 100);
+			}
+		}
+		else {
+			game->PrintMessage(L"Recording is not activated!\n", 255, 100, 100);
+		}
+		return false;
 	}
 
 	bool CamMod::ToggleRecording()
@@ -36,6 +64,7 @@
 			game->PrintMessage(L"Error: Viewer still activated!\n", 255, 100, 100);
 			return false;
 		}
+		if (not recording) previewer = true;
 		recording = !recording;
 		return true;
 	}
@@ -47,11 +76,13 @@
 		if (not viewer) {
 			if (not recording) {
 				if (key_pos_list.size() > 1) {
+					previewer = false;
 					viewer = true;
 					player->entity_data.position = key_pos_list[0];
 					game->camera_angle = key_angle_list[0];
 					old_pos = key_pos_list[0];
 					old_angle = key_angle_list[0];
+					int steps_per_key = (int)(60 * key_seconds[viewer_key_id]);
 					viewer_key_id = 1;
 					next_key_pos = key_pos_list[viewer_key_id];
 					vel = LongVector3(
@@ -74,7 +105,17 @@
 			return false;
 		}
 		game->target_camera_distance = 6;
+		step = 0;
 		viewer = false;
+		return true;
+	}
+
+	bool CamMod::TogglePreViewer()
+	{
+		cube::Game* game = cube::GetGame();
+		if (previewer) { previewer = false; game->camera_distance = 6; return true; }
+		if (viewer || not recording) return false;
+		previewer = true;
 		return true;
 	}
 
@@ -117,6 +158,7 @@
 		cube::Creature* player = game->GetPlayer();
 		if (viewer) {
 			game->target_camera_distance = 0;
+			int steps_per_key = (int)(60 * key_seconds[viewer_key_id - 1]);
 			if (step >= steps_per_key) {
 				step = 0;
 				player->entity_data.position = next_key_pos;
@@ -124,10 +166,14 @@
 				if (viewer_key_id + 1 >= key_pos_list.size()) {
 					viewer = false;
 					viewer_key_id = 0;
+					player->entity_data.position = key_pos_list[key_pos_list.size()-1];
+					game->target_camera_angle = key_angle_list[key_angle_list.size() - 1];
+					return;
 				}
 				else {
 					old_pos = key_pos_list[viewer_key_id];
 					old_angle = key_angle_list[viewer_key_id];
+					steps_per_key = (int)(60 * key_seconds[viewer_key_id]);
 					viewer_key_id += 1;
 					next_key_pos = key_pos_list[viewer_key_id];
 					vel = LongVector3(
@@ -150,6 +196,27 @@
 			game->target_camera_angle.y = old_angle.y + angle_vel.y * step;
 			game->target_camera_angle.z = old_angle.z + angle_vel.z * step;
 			step += 1;
+		}
+		if (previewer) {
+			game->camera_distance = 0;
+			if (previewer_key_id < key_pos_list.size()) {
+				if (previewertime > 0 and previewer_key_id < key_pos_list.size() - 1) {
+					LongVector3 old_pos = key_pos_list[previewer_key_id];
+					DoubleVector3 old_angle = key_angle_list[previewer_key_id];
+					LongVector3 new_pos = key_pos_list[previewer_key_id +1];
+					DoubleVector3 new_angle = key_angle_list[previewer_key_id +1];
+					LongVector3 previewposvec = LongVector3((new_pos.x - old_pos.x) * previewertime, (new_pos.y - old_pos.y) * previewertime, (new_pos.z - old_pos.z) * previewertime);
+					DoubleVector3 previewanglevec = DoubleVector3(old_angle.x + (new_angle.x - old_angle.x) * previewertime, old_angle.y + (new_angle.y - old_angle.y) * previewertime, old_angle.z + (new_angle.z - old_angle.z) * previewertime);
+					player->entity_data.position.x = old_pos.x + previewposvec.x;
+					player->entity_data.position.y = old_pos.y + previewposvec.y;
+					player->entity_data.position.z = old_pos.z + previewposvec.z;
+					game->target_camera_angle = previewanglevec;
+				}
+				else {
+					player->entity_data.position = key_pos_list[previewer_key_id];
+					game->target_camera_angle = key_angle_list[previewer_key_id];
+				}
+			}
 		}
 		if (player && free_cam) {
 			player->entity_data.velocity = FloatVector3(0, 0, 0);
@@ -186,6 +253,12 @@
 	}
 
 	void CamMod::OnGetKeyboardState(BYTE* diKeys) {
+		guiWindow->OnGetKeyboardState(diKeys);
+		guiButton.Update(diKeys);
+		if (guiButton.Pressed() == cube::DButton::State::Pressed) {
+			showwindow = !showwindow;
+		}
+
 		if (free_cam) {
 			static cube::DButton KeySpace = cube::DButton(57); // Space
 			static cube::DButton KeyW = cube::DButton(17); //W

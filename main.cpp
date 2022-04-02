@@ -1,6 +1,8 @@
 #include "CamMod.h"
 
-// Export of the mod created in this file, so that the modloader can see and use it.
+// A lot of code (like imgui code) come from ChrisMiuchiz BuildMod. Here the github link:
+// https://github.com/ChrisMiuchiz/Cube-World-Building-Mod
+
 EXPORT CamMod* MakeMod() {
 	return new CamMod();
 }

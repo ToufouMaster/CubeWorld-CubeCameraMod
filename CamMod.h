@@ -12,11 +12,8 @@
 class CamMod : GenericMod {
 	GuiWindow* guiWindow;
 
-	bool free_cam = false;
-	bool recording = false;
 	bool viewer = false;
 	int viewer_key_id = 0;
-	int steps_per_key = 60 * 5;
 	int step = 0;
 	LongVector3 cam_focus_pos;
 	LongVector3 next_key_pos;
@@ -26,14 +23,25 @@ class CamMod : GenericMod {
 	DoubleVector3 angle_vel;
 	DoubleVector3 old_angle;
 	cube::Creature::EntityData::Appearance player_appearance;
+	cube::DButton guiButton = cube::DButton(1);
 
 public:
+	bool showwindow = false;
+	bool free_cam = false;
+	bool recording = false;
+	bool previewer = false;
+	int previewer_key_id = 0;
+	float previewertime = 0.;
+	std::vector<float> key_seconds;
 	std::vector<LongVector3> key_pos_list;
 	std::vector<DoubleVector3> key_angle_list;
 
-	bool AddKey();
+	cube::DButton* GetGuiButton();
+	bool AddKey(int id);
+	bool RemoveKey(int id);
 	bool ToggleRecording();
 	bool ToggleViewer();
+	bool TogglePreViewer();
 	bool ToggleFreeCam();
 
 	std::vector<LongVector3> GetKeyPosList();

@@ -12,6 +12,12 @@ void GuiWindow::Present() {
 		}
 	}
 
+	if (!mod->showwindow) {
+		wantMouse = false;
+		wantKeyboard = false;
+		return;
+	}
+
 	ImGui::GetStyle().Colors[ImGuiCol_WindowBg] = ImVec4(0.15f, 0.10f, 0.15f, 0.95f);
 	ImGui::GetStyle().Colors[ImGuiCol_PopupBg] = ImVec4(0.15f, 0.10f, 0.15f, 0.95f);
 	ImGui::GetStyle().Colors[ImGuiCol_TitleBgActive] = ImVec4(0.50f, 0.30f, 0.50f, 1.00f);
@@ -47,21 +53,58 @@ void GuiWindow::Present() {
 	ImGui::SetNextWindowPos(ImVec2(100, 100), ImGuiCond_Once);
 	ImGui::Begin("Cam Mod", nullptr, size, -1.0, ImGuiWindowFlags_NoResize);
 
+	recording = mod->recording;
 	if (ImGui::Checkbox("Recording", &recording)) mod->ToggleRecording();
+	ImGui::SameLine(340);
+	ImGui::Text("Toggle Window");
 	if (ImGui::Checkbox("FreeCam", &freecam)) mod->ToggleFreeCam();
-	if (ImGui::Button("Add Key", ImVec2(100, 25))) mod->AddKey();
+	ImGui::SameLine(340); 
+	if (ImGui::Button(awaitingKeyRemap ?
+		"Waiting..." : (std::string("Remap ") + mod->GetGuiButton()->GetKeyName()).c_str()
+		, ImVec2(150, 25))) {
+		awaitingKeyRemap = !awaitingKeyRemap;
+	}
+	if (ImGui::Button("Add Key", ImVec2(100, 25))) mod->AddKey(selectedKey);
+	ImGui::SameLine(0, 10);
+	if (ImGui::Button("Del Key", ImVec2(100, 25))) mod->RemoveKey(selectedKey);
 	if (ImGui::Button("View", ImVec2(100, 25))) mod->ToggleViewer();
+	ImGui::SameLine(0, 10);
+	previewer = mod->previewer;
+	if (ImGui::Checkbox("Previewer", &previewer)) mod->TogglePreViewer();
 
-	ImGui::Separator();
 
-	ImGui::SliderInt("Key List", &selectedKey, 0, max(0, mod->GetKeyPosList().size()-1));
-	//ImGui::LabelText("Position:", "Test");
-	if (selectedKey < mod->GetKeyAngleList().size()) {
-		FloatVector3 angle = FloatVector3((float)mod->GetKeyAngleList()[selectedKey].x * (PI / 180), (float)mod->GetKeyAngleList()[selectedKey].y * (PI / 180), (float)mod->GetKeyAngleList()[selectedKey].z * (PI / 180));
-		ImGui::SliderAngle("x:", &angle.x, -3600, 3600);
-		ImGui::SliderAngle("y:", &angle.y, -3600, 3600);
-		ImGui::SliderAngle("z:", &angle.z, -3600, 3600);
-		mod->key_angle_list[selectedKey] = DoubleVector3(angle.x / (PI / 180), angle.y / (PI / 180), angle.z / (PI / 180));
+	ImGui::SliderInt("Key List", &selectedKey, 0, max(0, mod->GetKeyPosList().size() - 1));
+
+	if (selectedKey < mod->GetKeyPosList().size()) {
+		if (selectedKey < mod->GetKeyPosList().size()-1) {
+			ImGui::SliderFloat("Prerender Time", &previewertime, 0, 1.);
+			float time = mod->key_seconds[selectedKey];
+			ImGui::SliderFloat("Key Timer", &time, 0, 50., "%.1f sec");
+			mod->key_seconds[selectedKey] = time;
+		}
+
+		ImGui::Separator();
+
+		FloatVector3 angle = FloatVector3((float)mod->GetKeyAngleList()[selectedKey].x, (float)mod->GetKeyAngleList()[selectedKey].y, (float)mod->GetKeyAngleList()[selectedKey].z);
+		ImGui::DragFloat("x angle", &angle.x, 1., angle.x - 100, angle.x + 100, "%.0f deg");
+		ImGui::DragFloat("y angle", &angle.y, 1., angle.y - 100, angle.y + 100, "%.0f deg");
+		ImGui::DragFloat("z angle", &angle.z, 1., angle.z - 100, angle.z + 100, "%.0f deg");
+		mod->key_angle_list[selectedKey] = DoubleVector3(angle.x, angle.y, angle.z);
+		
+		ImGui::Separator();
+
+		LongVector3 pos = LongVector3(mod->GetKeyPosList()[selectedKey].x / 65536, mod->GetKeyPosList()[selectedKey].y / 65536, mod->GetKeyPosList()[selectedKey].z / 65536);
+		LongVector3 posmin = LongVector3(pos.x - 100, pos.y - 100, pos.z - 100);
+		LongVector3 posmax = LongVector3(pos.x + 100, pos.y + 100, pos.z + 100);
+		ImGui::DragScalar("x position", ImGuiDataType_S64, &pos.x, 1., &posmin.x, &posmax.x);
+		ImGui::DragScalar("y position", ImGuiDataType_S64, &pos.y, 1., &posmin.y, &posmax.y);
+		ImGui::DragScalar("z position", ImGuiDataType_S64, &pos.z, 1., &posmin.z, &posmax.z);
+		mod->key_pos_list[selectedKey].x = pos.x * 65536;
+		mod->key_pos_list[selectedKey].y = pos.y * 65536;
+		mod->key_pos_list[selectedKey].z = pos.z * 65536;
+		mod->previewer_key_id = selectedKey;
+
+		mod->previewertime = previewertime;
 	}
 
 	ImGui::End();
@@ -106,5 +149,28 @@ int GuiWindow::WindowProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 	}
 	if (wantKeyboard) return 1;
 
+	if (awaitingKeyRemap && keyRemapComplete) {
+		awaitingKeyRemap = false;
+		keyRemapComplete = false;
+		return 1;
+	}
+
 	return 0;
+}
+
+void GuiWindow::OnGetKeyboardState(BYTE* diKeys) {
+	if (wantKeyboard) {
+		memset(diKeys, 0, 256);
+	}
+	if (awaitingKeyRemap) {
+		for (int i = 0; i < 256; i++) {
+			if (diKeys[i]) {
+				keyRemapComplete = true;
+				mod->GetGuiButton()->SetKey(i); // Remap
+				memset(diKeys, 0, 256);
+				break;
+			}
+		}
+
+	}
 }

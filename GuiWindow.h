@@ -10,8 +10,13 @@ class CamMod;
 class GuiWindow {
 	bool recording = false;
 	bool freecam = false;
+	bool previewer = false;
 	int selectedKey = 0;
+	float previewertime = 0.;
+	float keysecond = 0.;
 
+	bool keyRemapComplete = false;
+	bool awaitingKeyRemap = false;
 	bool wantMouse = false;
 	bool wantKeyboard = false;
 	bool initialized = false;
@@ -22,6 +27,7 @@ public:
 	void Present();
 	bool Initialize();
 	int WindowProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+	void OnGetKeyboardState(BYTE* diKeys);
 };
 
 #endif // GUIWINDOW_H
