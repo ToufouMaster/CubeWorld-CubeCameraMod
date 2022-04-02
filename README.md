@@ -1,9 +1,9 @@
-# By the Lich Group<sup>tm</sup>  
+Don't forget to download the latest CubeWorldModLauncher from Nichiren: https://github.com/thetrueoneshots/Cube-World-Mod-Launcher
 
-Description
+Here's what you can do:
 
-INSTALLING
-
-Download CubeModLoader.fip from https://github.com/ChrisMiuchiz/Cube-World-Mod-Launcher/releases and place it in your Cube World folder (should be Steam\steamapps\common\Cube World). Make a folder called "Mods" (without quotes) in your Cube World folder and put LichModsCubePatch.dll in that Mods folder.
-
-<sup>*Lich Group owned and operated by Nichiren and Lock</sup>
+    Add and Delete Multiple key.
+    Set every Key position and angle.
+    Set the duration of a Key.
+    Use Previewer mode to see the exact path the camera take.
+    And finally view your record.
