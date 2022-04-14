@@ -5,6 +5,7 @@
 #include "imgui-1.73/imgui.h"
 #include "imgui-1.73/examples/imgui_impl_dx11.h"
 #include "imgui-1.73/examples/imgui_impl_win32.h"
+#include <filesystem>
 
 class CamMod;
 class GuiWindow {
@@ -14,9 +15,14 @@ class GuiWindow {
 	int selectedKey = 0;
 	float previewertime = 0.;
 	float keysecond = 0.;
+	std::string loaded_files;
+	std::string save_text = "";
+	int file_toload = 0;
 
 	bool keyRemapComplete = false;
 	bool awaitingKeyRemap = false;
+	bool textInputComplete = false;
+	bool awaitingTextInput = false;
 	bool wantMouse = false;
 	bool wantKeyboard = false;
 	bool initialized = false;
@@ -24,6 +30,7 @@ class GuiWindow {
 	CamMod* mod;
 public:
 	GuiWindow(CamMod* mod);
+	void LoadFiles();
 	void Present();
 	bool Initialize();
 	int WindowProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);

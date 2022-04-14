@@ -1,8 +1,56 @@
 #include "GuiWindow.h"
 #include "CamMod.h"
 
+static const char* AnimationTypeNames[]{ "Linear", "EaseInSine", "EaseOutSine", "EaseInOutSine" };
+
 GuiWindow::GuiWindow(CamMod* mod) {
 	this->mod = mod;
+}
+
+std::vector<std::string> split(std::string x, char delim = ' ')
+{
+	x += delim; //includes a delimiter at the end so last word is also read
+	std::vector<std::string> splitted;
+	std::string temp = "";
+	for (int i = 0; i < x.length(); i++)
+	{
+		if (x[i] == delim)
+		{
+			splitted.push_back(temp); //store words in "splitted" vector
+			temp = "";
+			i++;
+		}
+		temp += x[i];
+	}
+	return splitted;
+}
+
+const wchar_t* GetWC(const char* c)
+{
+	const size_t cSize = strlen(c) + 1;
+	wchar_t* wc = new wchar_t[cSize];
+	mbstowcs(wc, c, cSize);
+
+	return wc;
+}
+
+// Search of file stolen from ChrisMiunchiz ModLoader
+void GuiWindow::LoadFiles()
+{
+	WIN32_FIND_DATA data;
+	HANDLE hFind;
+	CreateDirectory("Mods\\CubeCamera\\jsons", NULL);
+	hFind = FindFirstFile("Mods\\CubeCamera\\jsons\\*.json", &data);
+	std::wstring ws(L"");
+	ws += GetWC(data.cFileName);
+	while (FindNextFile(hFind, &data)) {
+		if (hFind != INVALID_HANDLE_VALUE) {
+			ws += (wchar_t)0x00;
+			ws += GetWC(data.cFileName);
+		}
+	}
+	loaded_files = std::string(ws.begin(), ws.end());;
+	FindClose(hFind);
 }
 
 void GuiWindow::Present() {
@@ -58,12 +106,24 @@ void GuiWindow::Present() {
 	ImGui::SameLine(340);
 	ImGui::Text("Toggle Window");
 	if (ImGui::Checkbox("FreeCam", &freecam)) mod->ToggleFreeCam();
-	ImGui::SameLine(340); 
+	ImGui::SameLine(340);
 	if (ImGui::Button(awaitingKeyRemap ?
 		"Waiting..." : (std::string("Remap ") + mod->GetGuiButton()->GetKeyName()).c_str()
 		, ImVec2(150, 25))) {
 		awaitingKeyRemap = !awaitingKeyRemap;
 	}
+
+	if (ImGui::Button("Save", ImVec2(100, 25))) { mod->SaveRecord("RENAME_ME.json"); LoadFiles();}
+	/*ImGui::SameLine(0, 10);
+	auto savetext = *save_text.c_str();
+	if (ImGui::InputText("", &savetext, 20)) {
+		//awaitingTextInput = !awaitingTextInput;
+	}
+	save_text = savetext;*/
+	if (ImGui::Button("Load", ImVec2(100, 25))) mod->LoadRecord(split(loaded_files, 0x00)[file_toload]);
+	ImGui::SameLine(0, 10);
+	ImGui::Combo("", &file_toload, loaded_files.c_str());
+
 	if (ImGui::Button("Add Key", ImVec2(100, 25))) mod->AddKey(selectedKey);
 	ImGui::SameLine(0, 10);
 	if (ImGui::Button("Del Key", ImVec2(100, 25))) mod->RemoveKey(selectedKey);
@@ -71,16 +131,20 @@ void GuiWindow::Present() {
 	ImGui::SameLine(0, 10);
 	previewer = mod->previewer;
 	if (ImGui::Checkbox("Previewer", &previewer)) mod->TogglePreViewer();
-
+	ImGui::SameLine(0, 10);
+	ImGui::Checkbox("Repeat", &mod->repeat);
 
 	ImGui::SliderInt("Key List", &selectedKey, 0, max(0, mod->GetKeyPosList().size() - 1));
 
 	if (selectedKey < mod->GetKeyPosList().size()) {
-		if (selectedKey < mod->GetKeyPosList().size()-1) {
+		if (selectedKey < mod->GetKeyPosList().size() - 1) {
 			ImGui::SliderFloat("Prerender Time", &previewertime, 0, 1.);
 			float time = mod->key_seconds[selectedKey];
 			ImGui::SliderFloat("Key Timer", &time, 0, 50., "%.1f sec");
 			mod->key_seconds[selectedKey] = time;
+			int selected_anim = (int)mod->key_animation_list[selectedKey];
+			ImGui::Combo("Animation Type", &selected_anim, AnimationTypeNames, 4);
+			mod->key_animation_list[selectedKey] = CamMod::AnimationType(selected_anim);
 		}
 
 		ImGui::Separator();
@@ -90,7 +154,7 @@ void GuiWindow::Present() {
 		ImGui::DragFloat("y angle", &angle.y, 1., angle.y - 100, angle.y + 100, "%.0f deg");
 		ImGui::DragFloat("z angle", &angle.z, 1., angle.z - 100, angle.z + 100, "%.0f deg");
 		mod->key_angle_list[selectedKey] = DoubleVector3(angle.x, angle.y, angle.z);
-		
+
 		ImGui::Separator();
 
 		LongVector3 pos = LongVector3(mod->GetKeyPosList()[selectedKey].x / 65536, mod->GetKeyPosList()[selectedKey].y / 65536, mod->GetKeyPosList()[selectedKey].z / 65536);
@@ -134,6 +198,7 @@ bool GuiWindow::Initialize() {
 	ImGui::StyleColorsDark();
 	ImGui_ImplWin32_Init(hWnd);
 	ImGui_ImplDX11_Init(cube::GetID3D11Device(), cube::GetID3D11DeviceContext());
+	LoadFiles();
 	return true;
 }
 
@@ -155,6 +220,12 @@ int GuiWindow::WindowProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 		return 1;
 	}
 
+	if (awaitingTextInput && textInputComplete) {
+		awaitingTextInput = false;
+		textInputComplete = false;
+		return 1;
+	}
+
 	return 0;
 }
 
@@ -168,9 +239,14 @@ void GuiWindow::OnGetKeyboardState(BYTE* diKeys) {
 				keyRemapComplete = true;
 				mod->GetGuiButton()->SetKey(i); // Remap
 				memset(diKeys, 0, 256);
+				mod->SaveKeyBinds();
 				break;
 			}
 		}
-
+	}
+	else if (awaitingTextInput) {
+		if (diKeys[DIK_RETURN]) {
+			textInputComplete = true;
+		}
 	}
 }
